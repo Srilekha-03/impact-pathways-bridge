@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { ngoService } from '@/services/ngoService';
+import { orphanageService } from '@/services/orphanageService';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -16,6 +18,7 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user, onUpdateComplete }) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -27,27 +30,42 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user, onUp
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    // Update user in users array
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = users.map((u: any) => 
-      u.id === user.id ? { ...u, ...formData } : u
-    );
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    
-    // Update current user
-    const updatedCurrentUser = { ...user, ...formData };
-    localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
-    
-    toast({
-      title: "Success",
-      description: "Profile updated successfully!"
-    });
-    
-    onUpdateComplete();
-    onClose();
+    try {
+      let updateService;
+      if (user.role === 'ngo') {
+        updateService = ngoService.updateProfile;
+      } else if (user.role === 'orphanage') {
+        updateService = orphanageService.updateProfile;
+      } else {
+        throw new Error('Profile update not supported for this role');
+      }
+
+      await updateService(user.id, formData);
+      
+      // Update current user in localStorage
+      const updatedCurrentUser = { ...user, ...formData };
+      localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
+      
+      toast({
+        title: "Success",
+        description: "Profile updated successfully!"
+      });
+      
+      onUpdateComplete();
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update profile",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,8 +122,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user, onUp
             />
           </div>
           
-          <Button type="submit" className="w-full">
-            Update Profile
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Updating...' : 'Update Profile'}
           </Button>
         </form>
       </DialogContent>

@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Heart, LogOut, Shield, History, CheckCircle } from 'lucide-react';
 import RequestModal from '@/components/RequestModal';
 import ProfileModal from '@/components/ProfileModal';
+import { orphanageService } from '@/services/orphanageService';
+import { authService } from '@/services/authService';
+import { useToast } from '@/hooks/use-toast';
 
 const OrphanageDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [ngos, setNgos] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
@@ -18,6 +22,7 @@ const OrphanageDashboard = () => {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedNgo, setSelectedNgo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -29,25 +34,31 @@ const OrphanageDashboard = () => {
     loadData(user.id);
   }, [navigate]);
 
-  const loadData = (orphanageId: number) => {
-    // Load NGOs
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const ngoUsers = users.filter((u: any) => u.role === 'ngo');
-    setNgos(ngoUsers);
-
-    // Load requests by this orphanage
-    const allRequests = JSON.parse(localStorage.getItem('requests') || '[]');
-    const orphanageRequests = allRequests.filter((r: any) => r.orphanageId === orphanageId);
-    setRequests(orphanageRequests);
-
-    // Load accepted requests (distributions)
-    const allDistributions = JSON.parse(localStorage.getItem('distributions') || '[]');
-    const orphanageDistributions = allDistributions.filter((d: any) => d.orphanageId === orphanageId);
-    setAcceptedRequests(orphanageDistributions);
+  const loadData = async (orphanageId: number) => {
+    try {
+      setLoading(true);
+      const [ngosData, requestsData, acceptedData] = await Promise.all([
+        orphanageService.getNGOs(),
+        orphanageService.getRequestHistory(orphanageId),
+        orphanageService.getAcceptedRequests(orphanageId)
+      ]);
+      
+      setNgos(ngosData);
+      setRequests(requestsData);
+      setAcceptedRequests(acceptedData);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    authService.logout();
     navigate('/');
   };
 
@@ -56,12 +67,9 @@ const OrphanageDashboard = () => {
     setShowRequestModal(true);
   };
 
-  const getNgoName = (ngoId: number) => {
-    const ngo = ngos.find(n => n.id === ngoId);
-    return ngo?.name || 'Unknown';
-  };
-
-  if (!currentUser) return null;
+  if (!currentUser || loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50">
@@ -147,7 +155,7 @@ const OrphanageDashboard = () => {
                   <CardContent className="space-y-2">
                     <div className="flex justify-between">
                       <span className="font-semibold">NGO:</span>
-                      <span>{getNgoName(request.ngoId)}</span>
+                      <span>{request.ngo_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">Type:</span>
@@ -164,7 +172,7 @@ const OrphanageDashboard = () => {
                       <>
                         <div className="flex justify-between">
                           <span className="font-semibold">Item:</span>
-                          <span>{request.itemName}</span>
+                          <span>{request.item_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-semibold">Quantity:</span>
@@ -174,7 +182,7 @@ const OrphanageDashboard = () => {
                     )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Date:</span>
-                      <span>{new Date(request.createdAt).toLocaleDateString()}</span>
+                      <span>{new Date(request.created_at).toLocaleDateString()}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -195,11 +203,11 @@ const OrphanageDashboard = () => {
                   <CardContent className="space-y-2">
                     <div className="flex justify-between">
                       <span className="font-semibold">Donor:</span>
-                      <span className="text-blue-600 font-semibold">{distribution.donorName}</span>
+                      <span className="text-blue-600 font-semibold">{distribution.donor_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">NGO:</span>
-                      <span className="text-green-600 font-semibold">{getNgoName(distribution.ngoId)}</span>
+                      <span className="text-green-600 font-semibold">{distribution.ngo_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">Type:</span>
@@ -216,7 +224,7 @@ const OrphanageDashboard = () => {
                       <>
                         <div className="flex justify-between">
                           <span className="font-semibold">Item:</span>
-                          <span>{distribution.itemName}</span>
+                          <span>{distribution.item_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-semibold">Quantity:</span>
@@ -226,7 +234,7 @@ const OrphanageDashboard = () => {
                     )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Date:</span>
-                      <span>{new Date(distribution.createdAt).toLocaleDateString()}</span>
+                      <span>{new Date(distribution.created_at).toLocaleDateString()}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -275,7 +283,9 @@ const OrphanageDashboard = () => {
         onClose={() => setShowRequestModal(false)}
         ngo={selectedNgo}
         onRequestComplete={() => {
-          loadData(currentUser.id);
+          if (currentUser) {
+            loadData(currentUser.id);
+          }
         }}
       />
 

@@ -7,14 +7,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Users, Heart, TrendingUp, LogOut } from 'lucide-react';
 import DonationModal from '@/components/DonationModal';
+import { donorService } from '@/services/donorService';
+import { authService } from '@/services/authService';
+import { useToast } from '@/hooks/use-toast';
 
 const DonorDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [ngos, setNgos] = useState<any[]>([]);
   const [donations, setDonations] = useState<any[]>([]);
+  const [donationImpact, setDonationImpact] = useState<any[]>([]);
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [selectedNgo, setSelectedNgo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -23,20 +29,34 @@ const DonorDashboard = () => {
       return;
     }
     setCurrentUser(user);
-
-    // Load NGOs
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const ngoUsers = users.filter((u: any) => u.role === 'ngo');
-    setNgos(ngoUsers);
-
-    // Load donations
-    const allDonations = JSON.parse(localStorage.getItem('donations') || '[]');
-    const userDonations = allDonations.filter((d: any) => d.donorId === user.id);
-    setDonations(userDonations);
+    loadData(user.id);
   }, [navigate]);
 
+  const loadData = async (donorId: number) => {
+    try {
+      setLoading(true);
+      const [ngosData, donationsData, impactData] = await Promise.all([
+        donorService.getNGOs(),
+        donorService.getDonationHistory(donorId),
+        donorService.getDonationImpact(donorId)
+      ]);
+      
+      setNgos(ngosData);
+      setDonations(donationsData);
+      setDonationImpact(impactData);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    authService.logout();
     navigate('/');
   };
 
@@ -45,19 +65,9 @@ const DonorDashboard = () => {
     setShowDonationModal(true);
   };
 
-  const getDonationImpact = () => {
-    const distributions = JSON.parse(localStorage.getItem('distributions') || '[]');
-    return donations.map(donation => {
-      const distribution = distributions.find((d: any) => d.donationId === donation.id);
-      return {
-        ...donation,
-        status: distribution ? 'Distributed' : 'Pending',
-        orphanage: distribution ? distribution.orphanageName : null
-      };
-    });
-  };
-
-  if (!currentUser) return null;
+  if (!currentUser || loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
@@ -123,94 +133,88 @@ const DonorDashboard = () => {
 
           <TabsContent value="history" className="space-y-6">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {donations.map((donation) => {
-                const ngo = ngos.find(n => n.id === donation.ngoId);
-                return (
-                  <Card key={donation.id}>
-                    <CardHeader>
-                      <CardTitle className="text-lg">
-                        Donation to {ngo?.name}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
+              {donations.map((donation) => (
+                <Card key={donation.id}>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Donation to {donation.ngo_name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Type:</span>
+                      <Badge variant={donation.type === 'money' ? 'default' : 'secondary'}>
+                        {donation.type}
+                      </Badge>
+                    </div>
+                    {donation.type === 'money' ? (
                       <div className="flex justify-between">
-                        <span className="font-semibold">Type:</span>
-                        <Badge variant={donation.type === 'money' ? 'default' : 'secondary'}>
-                          {donation.type}
-                        </Badge>
+                        <span className="font-semibold">Amount:</span>
+                        <span>${donation.amount}</span>
                       </div>
-                      {donation.type === 'money' ? (
+                    ) : (
+                      <>
                         <div className="flex justify-between">
-                          <span className="font-semibold">Amount:</span>
-                          <span>${donation.amount}</span>
+                          <span className="font-semibold">Item:</span>
+                          <span>{donation.item_name}</span>
                         </div>
-                      ) : (
-                        <>
-                          <div className="flex justify-between">
-                            <span className="font-semibold">Item:</span>
-                            <span>{donation.itemName}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="font-semibold">Quantity:</span>
-                            <span>{donation.quantity}</span>
-                          </div>
-                        </>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="font-semibold">Date:</span>
-                        <span>{new Date(donation.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Quantity:</span>
+                          <span>{donation.quantity}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Date:</span>
+                      <span>{new Date(donation.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </TabsContent>
 
           <TabsContent value="impact" className="space-y-6">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getDonationImpact().map((donation) => {
-                const ngo = ngos.find(n => n.id === donation.ngoId);
-                return (
-                  <Card key={donation.id}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span>Impact Status</span>
-                        <Badge variant={donation.status === 'Distributed' ? 'default' : 'secondary'}>
-                          {donation.status}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
+              {donationImpact.map((donation) => (
+                <Card key={donation.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Impact Status</span>
+                      <Badge variant={donation.status === 'distributed' ? 'default' : 'secondary'}>
+                        {donation.status}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">NGO:</span>
+                      <span>{donation.ngo_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Type:</span>
+                      <span>{donation.type}</span>
+                    </div>
+                    {donation.type === 'money' ? (
                       <div className="flex justify-between">
-                        <span className="font-semibold">NGO:</span>
-                        <span>{ngo?.name}</span>
+                        <span className="font-semibold">Amount:</span>
+                        <span>${donation.amount}</span>
                       </div>
+                    ) : (
                       <div className="flex justify-between">
-                        <span className="font-semibold">Type:</span>
-                        <span>{donation.type}</span>
+                        <span className="font-semibold">Item:</span>
+                        <span>{donation.item_name} x{donation.quantity}</span>
                       </div>
-                      {donation.type === 'money' ? (
-                        <div className="flex justify-between">
-                          <span className="font-semibold">Amount:</span>
-                          <span>${donation.amount}</span>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between">
-                          <span className="font-semibold">Item:</span>
-                          <span>{donation.itemName} x{donation.quantity}</span>
-                        </div>
-                      )}
-                      {donation.status === 'Distributed' && donation.orphanage && (
-                        <div className="flex justify-between">
-                          <span className="font-semibold">Received by:</span>
-                          <span className="text-green-600 font-semibold">{donation.orphanage}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                    )}
+                    {donation.status === 'distributed' && donation.orphanage_name && (
+                      <div className="flex justify-between">
+                        <span className="font-semibold">Received by:</span>
+                        <span className="text-green-600 font-semibold">{donation.orphanage_name}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </TabsContent>
         </Tabs>
@@ -221,10 +225,9 @@ const DonorDashboard = () => {
         onClose={() => setShowDonationModal(false)}
         ngo={selectedNgo}
         onDonationComplete={() => {
-          // Refresh donations
-          const allDonations = JSON.parse(localStorage.getItem('donations') || '[]');
-          const userDonations = allDonations.filter((d: any) => d.donorId === currentUser.id);
-          setDonations(userDonations);
+          if (currentUser) {
+            loadData(currentUser.id);
+          }
         }}
       />
     </div>

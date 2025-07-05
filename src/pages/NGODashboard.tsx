@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Shield, LogOut, Heart, Users, TrendingUp } from 'lucide-react';
 import MatchOrphanageModal from '@/components/MatchOrphanageModal';
 import ProfileModal from '@/components/ProfileModal';
+import { ngoService } from '@/services/ngoService';
+import { authService } from '@/services/authService';
+import { useToast } from '@/hooks/use-toast';
 
 const NGODashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [donations, setDonations] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
@@ -18,6 +22,7 @@ const NGODashboard = () => {
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedDonation, setSelectedDonation] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -29,25 +34,31 @@ const NGODashboard = () => {
     loadData(user.id);
   }, [navigate]);
 
-  const loadData = (ngoId: number) => {
-    // Load donations to this NGO
-    const allDonations = JSON.parse(localStorage.getItem('donations') || '[]');
-    const ngoDonations = allDonations.filter((d: any) => d.ngoId === ngoId && d.status === 'pending');
-    setDonations(ngoDonations);
-
-    // Load requests to this NGO
-    const allRequests = JSON.parse(localStorage.getItem('requests') || '[]');
-    const ngoRequests = allRequests.filter((r: any) => r.ngoId === ngoId);
-    setRequests(ngoRequests);
-
-    // Load distributions by this NGO
-    const allDistributions = JSON.parse(localStorage.getItem('distributions') || '[]');
-    const ngoDistributions = allDistributions.filter((d: any) => d.ngoId === ngoId);
-    setDistributions(ngoDistributions);
+  const loadData = async (ngoId: number) => {
+    try {
+      setLoading(true);
+      const [donationsData, requestsData, distributionsData] = await Promise.all([
+        ngoService.getDonations(ngoId),
+        ngoService.getRequests(ngoId),
+        ngoService.getDistributions(ngoId)
+      ]);
+      
+      setDonations(donationsData);
+      setRequests(requestsData);
+      setDistributions(distributionsData);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    authService.logout();
     navigate('/');
   };
 
@@ -56,19 +67,9 @@ const NGODashboard = () => {
     setShowMatchModal(true);
   };
 
-  const getDonorName = (donorId: number) => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const donor = users.find((u: any) => u.id === donorId);
-    return donor?.name || 'Unknown';
-  };
-
-  const getOrphanageName = (orphanageId: number) => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const orphanage = users.find((u: any) => u.id === orphanageId);
-    return orphanage?.name || 'Unknown';
-  };
-
-  if (!currentUser) return null;
+  if (!currentUser || loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
@@ -108,12 +109,12 @@ const NGODashboard = () => {
 
           <TabsContent value="donations" className="space-y-6">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {donations.map((donation) => (
+              {donations.filter(d => d.status === 'pending').map((donation) => (
                 <Card key={donation.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <Heart className="h-5 w-5 text-red-500" />
-                      <span>From {getDonorName(donation.donorId)}</span>
+                      <span>From {donation.donor_name}</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -132,7 +133,7 @@ const NGODashboard = () => {
                       <>
                         <div className="flex justify-between">
                           <span className="font-semibold">Item:</span>
-                          <span>{donation.itemName}</span>
+                          <span>{donation.item_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-semibold">Quantity:</span>
@@ -159,7 +160,7 @@ const NGODashboard = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <Users className="h-5 w-5 text-blue-500" />
-                      <span>{getOrphanageName(request.orphanageId)}</span>
+                      <span>{request.orphanage_name}</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
@@ -178,7 +179,7 @@ const NGODashboard = () => {
                       <>
                         <div className="flex justify-between">
                           <span className="font-semibold">Item:</span>
-                          <span>{request.itemName}</span>
+                          <span>{request.item_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-semibold">Quantity:</span>
@@ -188,7 +189,7 @@ const NGODashboard = () => {
                     )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Date:</span>
-                      <span>{new Date(request.createdAt).toLocaleDateString()}</span>
+                      <span>{new Date(request.created_at).toLocaleDateString()}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -209,11 +210,11 @@ const NGODashboard = () => {
                   <CardContent className="space-y-2">
                     <div className="flex justify-between">
                       <span className="font-semibold">Donor:</span>
-                      <span>{distribution.donorName}</span>
+                      <span>{distribution.donor_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">Orphanage:</span>
-                      <span>{distribution.orphanageName}</span>
+                      <span>{distribution.orphanage_name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-semibold">Type:</span>
@@ -227,12 +228,12 @@ const NGODashboard = () => {
                     ) : (
                       <div className="flex justify-between">
                         <span className="font-semibold">Item:</span>
-                        <span>{distribution.itemName} x{distribution.quantity}</span>
+                        <span>{distribution.item_name} x{distribution.quantity}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Date:</span>
-                      <span>{new Date(distribution.createdAt).toLocaleDateString()}</span>
+                      <span>{new Date(distribution.created_at).toLocaleDateString()}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -285,7 +286,9 @@ const NGODashboard = () => {
         onClose={() => setShowMatchModal(false)}
         donation={selectedDonation}
         onMatchComplete={() => {
-          loadData(currentUser.id);
+          if (currentUser) {
+            loadData(currentUser.id);
+          }
         }}
       />
 

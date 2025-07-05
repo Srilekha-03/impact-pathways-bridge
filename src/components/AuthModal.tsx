@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { authService } from '@/services/authService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface AuthModalProps {
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, type }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     role: '',
     name: '',
@@ -31,73 +33,61 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, type }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    if (type === 'signup') {
-      // Store user data in localStorage for demo
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const existingUser = users.find((user: any) => user.email === formData.email);
-      
-      if (existingUser) {
+    try {
+      if (type === 'signup') {
+        const result = await authService.register(formData);
         toast({
-          title: "Error",
-          description: "User already exists with this email",
-          variant: "destructive"
+          title: "Success",
+          description: "Account created successfully!"
         });
-        return;
-      }
-      
-      const newUser = {
-        id: Date.now(),
-        ...formData,
-        createdAt: new Date().toISOString()
-      };
-      
-      users.push(newUser);
-      localStorage.setItem('users', JSON.stringify(users));
-      localStorage.setItem('currentUser', JSON.stringify(newUser));
-    } else {
-      // Login logic
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = users.find((u: any) => u.email === formData.email && u.password === formData.password);
-      
-      if (!user) {
+        // Navigate based on role
+        switch (formData.role) {
+          case 'donor':
+            navigate('/donor-dashboard');
+            break;
+          case 'ngo':
+            navigate('/ngo-dashboard');
+            break;
+          case 'orphanage':
+            navigate('/orphanage-dashboard');
+            break;
+        }
+      } else {
+        const result = await authService.login({
+          email: formData.email,
+          password: formData.password
+        });
         toast({
-          title: "Error",
-          description: "Invalid email or password",
-          variant: "destructive"
+          title: "Success",
+          description: "Logged in successfully!"
         });
-        return;
+        // Navigate based on user role
+        switch (result.user.role) {
+          case 'donor':
+            navigate('/donor-dashboard');
+            break;
+          case 'ngo':
+            navigate('/ngo-dashboard');
+            break;
+          case 'orphanage':
+            navigate('/orphanage-dashboard');
+            break;
+        }
       }
-      
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      setFormData({ role: user.role, name: user.name, email: user.email, password: user.password, description: user.description, experience: user.experience });
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || `${type === 'login' ? 'Login' : 'Registration'} failed`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-
-    toast({
-      title: "Success",
-      description: `${type === 'login' ? 'Logged in' : 'Account created'} successfully!`
-    });
-
-    // Navigate based on role
-    const userRole = type === 'login' ? 
-      JSON.parse(localStorage.getItem('currentUser') || '{}').role : 
-      formData.role;
-      
-    switch (userRole) {
-      case 'donor':
-        navigate('/donor-dashboard');
-        break;
-      case 'ngo':
-        navigate('/ngo-dashboard');
-        break;
-      case 'orphanage':
-        navigate('/orphanage-dashboard');
-        break;
-    }
-    
-    onClose();
   };
 
   return (
@@ -199,8 +189,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, type }) => {
             </div>
           )}
           
-          <Button type="submit" className="w-full">
-            {type === 'login' ? 'Login' : 'Sign Up'}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Loading...' : (type === 'login' ? 'Login' : 'Sign Up')}
           </Button>
         </form>
         

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { donorService } from '@/services/donorService';
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface DonationModalProps {
 
 const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, ngo, onDonationComplete }) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: '',
     amount: '',
@@ -27,35 +29,39 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, ngo, onD
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const donations = JSON.parse(localStorage.getItem('donations') || '[]');
-    
-    const newDonation = {
-      id: Date.now(),
-      donorId: currentUser.id,
-      ngoId: ngo.id,
-      type: formData.type,
-      amount: formData.type === 'money' ? parseFloat(formData.amount) : null,
-      itemName: formData.type === 'item' ? formData.itemName : null,
-      quantity: formData.type === 'item' ? parseInt(formData.quantity) : null,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
-    
-    donations.push(newDonation);
-    localStorage.setItem('donations', JSON.stringify(donations));
-    
-    toast({
-      title: "Success",
-      description: "Donation submitted successfully!"
-    });
-    
-    setFormData({ type: '', amount: '', itemName: '', quantity: '' });
-    onDonationComplete();
-    onClose();
+    try {
+      const donationData = {
+        ngoId: ngo.id,
+        type: formData.type as 'money' | 'item',
+        ...(formData.type === 'money' 
+          ? { amount: parseFloat(formData.amount) }
+          : { itemName: formData.itemName, quantity: parseInt(formData.quantity) }
+        )
+      };
+
+      await donorService.donate(donationData);
+      
+      toast({
+        title: "Success",
+        description: "Donation submitted successfully!"
+      });
+      
+      setFormData({ type: '', amount: '', itemName: '', quantity: '' });
+      onDonationComplete();
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to submit donation",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!ngo) return null;
@@ -124,8 +130,8 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, ngo, onD
             </>
           )}
           
-          <Button type="submit" className="w-full">
-            Submit Donation
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Submitting...' : 'Submit Donation'}
           </Button>
         </form>
       </DialogContent>

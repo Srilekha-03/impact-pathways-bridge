@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { orphanageService } from '@/services/orphanageService';
 
 interface RequestModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface RequestModalProps {
 
 const RequestModal: React.FC<RequestModalProps> = ({ isOpen, onClose, ngo, onRequestComplete }) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: '',
     amount: '',
@@ -27,35 +29,39 @@ const RequestModal: React.FC<RequestModalProps> = ({ isOpen, onClose, ngo, onReq
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const requests = JSON.parse(localStorage.getItem('requests') || '[]');
-    
-    const newRequest = {
-      id: Date.now(),
-      orphanageId: currentUser.id,
-      ngoId: ngo.id,
-      type: formData.type,
-      amount: formData.type === 'money' ? parseFloat(formData.amount) : null,
-      itemName: formData.type === 'item' ? formData.itemName : null,
-      quantity: formData.type === 'item' ? parseInt(formData.quantity) : null,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
-    
-    requests.push(newRequest);
-    localStorage.setItem('requests', JSON.stringify(requests));
-    
-    toast({
-      title: "Success",
-      description: "Request submitted successfully!"
-    });
-    
-    setFormData({ type: '', amount: '', itemName: '', quantity: '' });
-    onRequestComplete();
-    onClose();
+    try {
+      const requestData = {
+        ngoId: ngo.id,
+        type: formData.type as 'money' | 'item',
+        ...(formData.type === 'money' 
+          ? { amount: parseFloat(formData.amount) }
+          : { itemName: formData.itemName, quantity: parseInt(formData.quantity) }
+        )
+      };
+
+      await orphanageService.submitRequest(requestData);
+      
+      toast({
+        title: "Success",
+        description: "Request submitted successfully!"
+      });
+      
+      setFormData({ type: '', amount: '', itemName: '', quantity: '' });
+      onRequestComplete();
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to submit request",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!ngo) return null;
@@ -124,8 +130,8 @@ const RequestModal: React.FC<RequestModalProps> = ({ isOpen, onClose, ngo, onReq
             </>
           )}
           
-          <Button type="submit" className="w-full">
-            Submit Request
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Submitting...' : 'Submit Request'}
           </Button>
         </form>
       </DialogContent>
