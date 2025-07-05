@@ -12,16 +12,53 @@ import { orphanageService } from '@/services/orphanageService';
 import { authService } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  description?: string;
+}
+
+interface NGO {
+  id: number;
+  name: string;
+  description: string;
+  experience: string;
+}
+
+interface Request {
+  id: number;
+  ngo_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+}
+
+interface AcceptedRequest {
+  id: number;
+  donor_name: string;
+  ngo_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  created_at: string;
+}
+
 const OrphanageDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [ngos, setNgos] = useState<any[]>([]);
-  const [requests, setRequests] = useState<any[]>([]);
-  const [acceptedRequests, setAcceptedRequests] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [ngos, setNgos] = useState<NGO[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [acceptedRequests, setAcceptedRequests] = useState<AcceptedRequest[]>([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedNgo, setSelectedNgo] = useState<any>(null);
+  const [selectedNgo, setSelectedNgo] = useState<NGO | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,7 +83,7 @@ const OrphanageDashboard = () => {
       setNgos(ngosData);
       setRequests(requestsData);
       setAcceptedRequests(acceptedData);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to load data",
@@ -62,7 +99,7 @@ const OrphanageDashboard = () => {
     navigate('/');
   };
 
-  const handleRequest = (ngo: any) => {
+  const handleRequest = (ngo: NGO) => {
     setSelectedNgo(ngo);
     setShowRequestModal(true);
   };

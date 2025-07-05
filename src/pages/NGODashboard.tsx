@@ -12,16 +12,58 @@ import { ngoService } from '@/services/ngoService';
 import { authService } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  description?: string;
+  experience?: string;
+}
+
+interface Donation {
+  id: number;
+  donor_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  status: 'pending' | 'distributed';
+  created_at: string;
+}
+
+interface Request {
+  id: number;
+  orphanage_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+}
+
+interface Distribution {
+  id: number;
+  donor_name: string;
+  orphanage_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  created_at: string;
+}
+
 const NGODashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [donations, setDonations] = useState<any[]>([]);
-  const [requests, setRequests] = useState<any[]>([]);
-  const [distributions, setDistributions] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [distributions, setDistributions] = useState<Distribution[]>([]);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedDonation, setSelectedDonation] = useState<any>(null);
+  const [selectedDonation, setSelectedDonation] = useState<Donation | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,7 +88,7 @@ const NGODashboard = () => {
       setDonations(donationsData);
       setRequests(requestsData);
       setDistributions(distributionsData);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to load data",
@@ -62,7 +104,7 @@ const NGODashboard = () => {
     navigate('/');
   };
 
-  const handleMatchOrphanages = (donation: any) => {
+  const handleMatchOrphanages = (donation: Donation) => {
     setSelectedDonation(donation);
     setShowMatchModal(true);
   };
