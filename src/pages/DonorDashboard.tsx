@@ -11,15 +11,50 @@ import { donorService } from '@/services/donorService';
 import { authService } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+interface NGO {
+  id: number;
+  name: string;
+  description: string;
+  experience: string;
+}
+
+interface Donation {
+  id: number;
+  ngo_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  created_at: string;
+}
+
+interface DonationImpact {
+  id: number;
+  ngo_name: string;
+  type: 'money' | 'item';
+  amount?: number;
+  item_name?: string;
+  quantity?: number;
+  status: 'pending' | 'distributed';
+  orphanage_name?: string;
+}
+
 const DonorDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [ngos, setNgos] = useState<any[]>([]);
-  const [donations, setDonations] = useState<any[]>([]);
-  const [donationImpact, setDonationImpact] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [ngos, setNgos] = useState<NGO[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [donationImpact, setDonationImpact] = useState<DonationImpact[]>([]);
   const [showDonationModal, setShowDonationModal] = useState(false);
-  const [selectedNgo, setSelectedNgo] = useState<any>(null);
+  const [selectedNgo, setSelectedNgo] = useState<NGO | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,7 +79,7 @@ const DonorDashboard = () => {
       setNgos(ngosData);
       setDonations(donationsData);
       setDonationImpact(impactData);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to load data",
@@ -60,7 +95,7 @@ const DonorDashboard = () => {
     navigate('/');
   };
 
-  const handleDonate = (ngo: any) => {
+  const handleDonate = (ngo: NGO) => {
     setSelectedNgo(ngo);
     setShowDonationModal(true);
   };
